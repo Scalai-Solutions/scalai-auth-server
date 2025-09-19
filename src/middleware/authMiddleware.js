@@ -47,7 +47,8 @@ const authenticateToken = async (req, res, next) => {
 const generateTokens = async (user, userAgent, ipAddress) => {
   const payload = {
     id: user._id.toString(),
-    email: user.email
+    email: user.email,
+    role: user.role // Add role to JWT payload
   };
 
   // Generate access token

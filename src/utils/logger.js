@@ -7,6 +7,7 @@ class Logger {
       timestamp,
       level,
       message,
+      service: 'auth-server',
       ...meta
     };
 
@@ -34,6 +35,34 @@ class Logger {
     if (config.server.nodeEnv === 'development') {
       this.log('debug', message, meta);
     }
+  }
+
+  // Security event logging
+  static security(event, severity = 'info', meta = {}) {
+    const securityMeta = {
+      event,
+      severity,
+      category: 'security',
+      ...meta
+    };
+
+    const logLevel = severity === 'critical' || severity === 'high' ? 'error' : 
+                     severity === 'medium' ? 'warn' : 'info';
+
+    this.log(logLevel, `Security Event: ${event}`, securityMeta);
+  }
+
+  // Audit logging
+  static audit(action, resource, meta = {}) {
+    const auditMeta = {
+      action,
+      resource,
+      category: 'audit',
+      timestamp: new Date().toISOString(),
+      ...meta
+    };
+
+    this.log('info', `Audit: ${action} on ${resource}`, auditMeta);
   }
 }
 

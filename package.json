@@ -8,7 +8,8 @@
     "dev": "nodemon src/server.js",
     "dev:clear": "nodemon src/server.js --clear-db",
     "clear-db": "node src/server.js --clear-db",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "manage-ips": "node scripts/manage-authorized-ips.js"
   },
   "keywords": ["auth", "jwt", "mongodb", "express"],
   "author": "",

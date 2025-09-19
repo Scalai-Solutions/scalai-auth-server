@@ -1,4 +1,5 @@
 const Joi = require('joi');
+const mongoose = require('mongoose');
 
 const registerSchema = Joi.object({
   email: Joi.string()
@@ -114,10 +115,75 @@ const validate = (schema) => {
   };
 };
 
+// Validate change user role request
+const validateChangeUserRole = (req, res, next) => {
+  const { userId, newRole, reason } = req.body;
+  const errors = [];
+
+  // Validate userId
+  if (!userId) {
+    errors.push({ field: 'userId', message: 'User ID is required' });
+  } else if (!mongoose.Types.ObjectId.isValid(userId)) {
+    errors.push({ field: 'userId', message: 'Invalid user ID format' });
+  }
+
+  // Validate newRole
+  const validRoles = ['user', 'admin', 'super_admin'];
+  if (!newRole) {
+    errors.push({ field: 'newRole', message: 'New role is required' });
+  } else if (!validRoles.includes(newRole)) {
+    errors.push({ 
+      field: 'newRole', 
+      message: 'Invalid role specified',
+      validRoles 
+    });
+  }
+
+  // Validate reason for super_admin role
+  if (newRole === 'super_admin') {
+    if (!reason || typeof reason !== 'string') {
+      errors.push({ 
+        field: 'reason', 
+        message: 'Reason is required for super admin role assignment' 
+      });
+    } else if (reason.trim().length < 10) {
+      errors.push({ 
+        field: 'reason', 
+        message: 'Reason must be at least 10 characters long for super admin role' 
+      });
+    } else if (reason.trim().length > 500) {
+      errors.push({ 
+        field: 'reason', 
+        message: 'Reason cannot exceed 500 characters' 
+      });
+    }
+  }
+
+  // Optional reason validation for other roles
+  if (reason && typeof reason === 'string' && reason.length > 500) {
+    errors.push({ 
+      field: 'reason', 
+      message: 'Reason cannot exceed 500 characters' 
+    });
+  }
+
+  if (errors.length > 0) {
+    return res.status(400).json({
+      success: false,
+      message: 'Validation failed',
+      code: 'VALIDATION_ERROR',
+      errors
+    });
+  }
+
+  next();
+};
+
 module.exports = {
   validateRegister: validate(registerSchema),
   validateLogin: validate(loginSchema),
   validateResetPasswordRequest: validate(resetPasswordRequestSchema),
   validateResetPassword: validate(resetPasswordSchema),
-  validateRefreshToken: validate(refreshTokenSchema)
+  validateRefreshToken: validate(refreshTokenSchema),
+  validateChangeUserRole: validateChangeUserRole
 }; 

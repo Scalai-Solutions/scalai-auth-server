@@ -12,7 +12,8 @@ const {
   getActiveSessions,
   revokeSession,
   logout,
-  logoutAll
+  logoutAll,
+  changeUserRole
 } = require('../controllers/authController');
 
 // Import validators
@@ -21,11 +22,17 @@ const {
   validateLogin,
   validateResetPasswordRequest,
   validateResetPassword,
-  validateRefreshToken
+  validateRefreshToken,
+  validateChangeUserRole
 } = require('../validators/authValidator');
 
 // Import middleware
 const { authenticateToken } = require('../middleware/authMiddleware');
+const { 
+  requireAuthorizedIP, 
+  requireSuperAdmin, 
+  logSensitiveOperation 
+} = require('../middleware/ipAuthMiddleware');
 
 // Public routes
 router.post('/register', validateRegister, register);
@@ -40,5 +47,15 @@ router.get('/sessions', authenticateToken, getActiveSessions);
 router.delete('/sessions/:sessionId', authenticateToken, revokeSession);
 router.post('/logout', logout); // Can work with or without authentication
 router.post('/logout-all', authenticateToken, logoutAll);
+
+// Secure administrative routes (IP-restricted)
+router.post('/admin/change-user-role',
+  validateChangeUserRole,                        // Validate request body
+  authenticateToken,                              // Must be authenticated
+  requireSuperAdmin,                             // Must be super admin
+  requireAuthorizedIP('changeUserRole'),         // Must be from authorized IP
+  logSensitiveOperation('change_user_role'),     // Log the operation
+  changeUserRole                                 // Controller method
+);
 
 module.exports = router;

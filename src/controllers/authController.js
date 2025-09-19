@@ -548,6 +548,162 @@ const logoutAll = async (req, res, next) => {
   }
 };
 
+// Secure operation: Change user role (restricted to authorized IPs)
+const changeUserRole = async (req, res, next) => {
+  try {
+    const { userId, newRole, reason } = req.body;
+    const adminUserId = req.user.id;
+
+    // Validate required fields
+    if (!userId || !newRole) {
+      return res.status(400).json({
+        success: false,
+        message: 'User ID and new role are required',
+        code: 'MISSING_REQUIRED_FIELDS'
+      });
+    }
+
+    // Validate role
+    const validRoles = ['user', 'admin', 'super_admin'];
+    if (!validRoles.includes(newRole)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid role specified',
+        code: 'INVALID_ROLE',
+        validRoles
+      });
+    }
+
+    // Find target user
+    const targetUser = await User.findById(userId);
+    if (!targetUser) {
+      return res.status(404).json({
+        success: false,
+        message: 'User not found',
+        code: 'USER_NOT_FOUND'
+      });
+    }
+
+    // Check if user is trying to change their own role
+    if (userId === adminUserId) {
+      return res.status(400).json({
+        success: false,
+        message: 'Cannot change your own role',
+        code: 'CANNOT_CHANGE_OWN_ROLE'
+      });
+    }
+
+    // Store old role for logging
+    const oldRole = targetUser.role;
+
+    // Check if role is actually changing
+    if (oldRole === newRole) {
+      return res.status(400).json({
+        success: false,
+        message: 'User already has the specified role',
+        code: 'ROLE_UNCHANGED'
+      });
+    }
+
+    // Additional validation for super_admin role creation
+    if (newRole === 'super_admin') {
+      // Only existing super_admins can create new super_admins
+      if (req.user.role !== 'super_admin') {
+        return res.status(403).json({
+          success: false,
+          message: 'Only super admins can create other super admins',
+          code: 'SUPER_ADMIN_CREATION_DENIED'
+        });
+      }
+
+      // Require reason for super_admin role changes
+      if (!reason || reason.trim().length < 10) {
+        return res.status(400).json({
+          success: false,
+          message: 'Detailed reason required for super admin role assignment (minimum 10 characters)',
+          code: 'REASON_REQUIRED'
+        });
+      }
+    }
+
+    // Update user role
+    targetUser.role = newRole;
+    
+    // Increment session version to invalidate existing tokens
+    targetUser.sessionVersion += 1;
+    
+    await targetUser.save();
+
+    Logger.security('User role changed', 'critical', {
+      adminUserId,
+      targetUserId: userId,
+      targetUserEmail: targetUser.email,
+      oldRole,
+      newRole,
+      reason: reason || 'No reason provided',
+      clientIP: req.authorizedIP?.ipAddress,
+      authorizedIPId: req.authorizedIP?.id
+    });
+
+    // Log audit entry
+    const AuditLog = require('../models/AuditLog');
+    await AuditLog.logOperation({
+      userId: adminUserId,
+      operation: 'change_user_role',
+      resource: 'user',
+      resourceId: userId,
+      details: {
+        targetUserEmail: targetUser.email,
+        oldRole,
+        newRole,
+        reason,
+        requiresReauthentication: true
+      },
+      result: { success: true },
+      requestContext: {
+        ipAddress: req.authorizedIP?.ipAddress,
+        userAgent: req.get('User-Agent'),
+        endpoint: req.originalUrl
+      },
+      securityFlags: {
+        isSensitiveOperation: true,
+        requiresAuthorizedIP: true,
+        riskLevel: newRole === 'super_admin' ? 'critical' : 'high'
+      }
+    });
+
+    res.json({
+      success: true,
+      message: 'User role changed successfully',
+      data: {
+        userId: targetUser._id,
+        email: targetUser.email,
+        oldRole,
+        newRole,
+        sessionVersionIncremented: true,
+        requiresReauthentication: true
+      },
+      meta: {
+        changedBy: adminUserId,
+        changedAt: new Date(),
+        clientIP: req.authorizedIP?.ipAddress,
+        dailyUsageRemaining: req.authorizedIP?.dailyUsageRemaining
+      }
+    });
+
+  } catch (error) {
+    Logger.error('Failed to change user role', {
+      error: error.message,
+      stack: error.stack,
+      adminUserId: req.user?.id,
+      targetUserId: req.body?.userId,
+      newRole: req.body?.newRole
+    });
+
+    next(error);
+  }
+};
+
 module.exports = {
   register,
   login,
@@ -558,5 +714,6 @@ module.exports = {
   getActiveSessions,
   revokeSession,
   logout,
-  logoutAll
+  logoutAll,
+  changeUserRole
 };
