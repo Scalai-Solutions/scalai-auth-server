@@ -18,6 +18,7 @@ const {
 const authRoutes = require('./routes/authRoutes');
 const healthRoutes = require('./routes/healthRoutes');
 const rbacRoutes = require('./routes/rbacRoutes');
+const userRoutes = require('./routes/userRoutes');
 
 const app = express();
 
@@ -59,6 +60,7 @@ app.use('/api/auth/request-reset-password', sensitiveOperationLimiter(5, 15)); /
 
 app.use('/api/auth', authRoutes);
 app.use('/api/rbac', rbacRoutes); // Add RBAC management routes
+app.use('/api/users', userRoutes); // Add user management routes
 
 // 404 handler
 app.use((req, res) => {
