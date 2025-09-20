@@ -1,7 +1,8 @@
 const express = require('express');
 const router = express.Router();
 const User = require('../models/User');
-const { authenticateToken, requireRole } = require('../middleware/authMiddleware');
+const { authenticateToken } = require('../middleware/authMiddleware');
+const { requireRole } = require('../middleware/rbacMiddleware');
 const Logger = require('../utils/logger');
 
 // GET /api/users/search - Search for users by email
