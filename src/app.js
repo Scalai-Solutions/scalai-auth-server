@@ -17,6 +17,7 @@ const {
 // Import routes
 const authRoutes = require('./routes/authRoutes');
 const healthRoutes = require('./routes/healthRoutes');
+const rbacRoutes = require('./routes/rbacRoutes');
 
 const app = express();
 
@@ -57,6 +58,7 @@ app.use('/api/auth/reset-password', sensitiveOperationLimiter(3, 60)); // 3 atte
 app.use('/api/auth/request-reset-password', sensitiveOperationLimiter(5, 15)); // 5 attempts per 15 minutes
 
 app.use('/api/auth', authRoutes);
+app.use('/api/rbac', rbacRoutes); // Add RBAC management routes
 
 // 404 handler
 app.use((req, res) => {
