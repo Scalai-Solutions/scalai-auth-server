@@ -117,7 +117,7 @@ const requireRole = (requiredRole, options = {}) => {
       const userGlobalRole = req.user.role;
       const subaccountId = options.extractSubaccountId ? 
         options.extractSubaccountId(req) : 
-        req.params.subaccountId || req.body.subaccountId || null;
+        req.params.subaccountId || req.body.subaccountId || req.query.subaccountId || null;
 
       // Super admin always passes
       if (userGlobalRole === 'super_admin') {
