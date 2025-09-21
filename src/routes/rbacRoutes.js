@@ -42,7 +42,6 @@ router.post('/permissions/revoke',
 );
 
 router.get('/permissions/check',
-  requireRole('admin'),
   RBACController.checkUserPermissions
 );
 
