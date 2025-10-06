@@ -452,6 +452,387 @@ Referrer-Policy: strict-origin-when-cross-origin
 }
 ```
 
+## RBAC Endpoints
+
+### POST /rbac/resources
+Create a new RBAC resource with endpoints (Super Admin only).
+
+**Authentication:** Required (Super Admin role)
+
+**Request Body:**
+```json
+{
+  "name": "database_operations",
+  "description": "Database queries and CRUD operations",
+  "type": "database_operations",
+  "service": "database-server",
+  "endpoints": [
+    {
+      "method": "POST",
+      "path": "/api/database/:subaccountId/collections/:collection/find",
+      "description": "Query documents from a collection",
+      "requiredPermissions": ["read"]
+    },
+    {
+      "method": "POST",
+      "path": "/api/database/:subaccountId/collections/:collection/insertOne",
+      "description": "Insert a single document",
+      "requiredPermissions": ["write"]
+    }
+  ],
+  "defaultPermissions": {
+    "super_admin": {
+      "read": true,
+      "write": true,
+      "delete": true,
+      "admin": true
+    },
+    "admin": {
+      "read": true,
+      "write": true,
+      "delete": false,
+      "admin": false
+    },
+    "user": {
+      "read": false,
+      "write": false,
+      "delete": false,
+      "admin": false
+    }
+  },
+  "settings": {
+    "requiresSubaccount": true,
+    "globalAdminAccess": false
+  }
+}
+```
+
+**Response (201):**
+```json
+{
+  "success": true,
+  "message": "Resource created successfully",
+  "data": {
+    "_id": "resource_id",
+    "name": "database_operations",
+    "description": "Database queries and CRUD operations",
+    "type": "database_operations",
+    "service": "database-server",
+    "endpoints": [...],
+    "defaultPermissions": {...},
+    "settings": {...},
+    "isActive": true,
+    "createdBy": "user_id",
+    "createdAt": "2025-01-01T00:00:00.000Z",
+    "updatedAt": "2025-01-01T00:00:00.000Z"
+  }
+}
+```
+
+### GET /rbac/resources
+List all RBAC resources (Admin only).
+
+**Authentication:** Required (Admin role)
+
+**Query Parameters:**
+- `service`: Filter by service (optional)
+- `type`: Filter by resource type (optional)
+- `isActive`: Filter by active status (optional, defaults to true)
+
+**Response (200):**
+```json
+{
+  "success": true,
+  "data": {
+    "resources": [
+      {
+        "_id": "resource_id",
+        "name": "database_operations",
+        "description": "Database queries and CRUD operations",
+        "type": "database_operations",
+        "service": "database-server",
+        "endpoints": [...],
+        "createdBy": {
+          "email": "admin@example.com",
+          "firstName": "Admin",
+          "lastName": "User"
+        }
+      }
+    ],
+    "count": 1
+  }
+}
+```
+
+### PUT /rbac/resources/:resourceId
+Update an existing RBAC resource and add/update endpoints (Super Admin only).
+
+**Authentication:** Required (Super Admin role)
+
+**Parameters:**
+- `resourceId`: The ID of the resource to update
+
+**Request Body:**
+```json
+{
+  "description": "Updated description (optional)",
+  "endpoints": [
+    {
+      "method": "POST",
+      "path": "/api/database/:subaccountId/collections/:collection/aggregate",
+      "description": "Aggregate documents from a collection",
+      "requiredPermissions": ["read"]
+    }
+  ],
+  "defaultPermissions": {
+    "admin": {
+      "read": true,
+      "write": true,
+      "delete": true,
+      "admin": false
+    }
+  },
+  "settings": {
+    "rateLimits": {
+      "perUser": {
+        "requests": 200,
+        "windowMs": 60000
+      }
+    }
+  },
+  "isActive": true
+}
+```
+
+**Response (200):**
+```json
+{
+  "success": true,
+  "message": "Resource updated successfully",
+  "data": {
+    "_id": "resource_id",
+    "name": "database_operations",
+    "description": "Updated description",
+    "type": "database_operations",
+    "service": "database-server",
+    "endpoints": [
+      {
+        "method": "POST",
+        "path": "/api/database/:subaccountId/collections/:collection/find",
+        "description": "Query documents from a collection",
+        "requiredPermissions": ["read"]
+      },
+      {
+        "method": "POST",
+        "path": "/api/database/:subaccountId/collections/:collection/aggregate",
+        "description": "Aggregate documents from a collection",
+        "requiredPermissions": ["read"]
+      }
+    ],
+    "updatedAt": "2025-01-01T00:00:00.000Z"
+  }
+}
+```
+
+**Note:** When updating endpoints, the system **merges** new endpoints with existing ones. If an endpoint with the same `method` and `path` exists, it will be updated. New endpoints will be added without removing existing ones.
+
+### POST /rbac/permissions/grant
+Grant permissions to a user for a resource (Admin only).
+
+**Authentication:** Required (Admin role)
+
+**Request Body:**
+```json
+{
+  "userId": "user_id_here",
+  "resourceName": "database_operations",
+  "permissions": {
+    "read": true,
+    "write": true,
+    "delete": false,
+    "admin": false
+  },
+  "subaccountId": "subaccount_id_here",
+  "expiresAt": "2024-12-31T23:59:59Z",
+  "constraints": {
+    "allowedIPs": ["192.168.1.100"],
+    "dailyUsageLimit": 100
+  }
+}
+```
+
+**Response (200):**
+```json
+{
+  "success": true,
+  "message": "Permission granted successfully",
+  "data": {
+    "_id": "permission_id",
+    "userId": "user_id",
+    "resourceId": "resource_id",
+    "subaccountId": "subaccount_id",
+    "permissions": {
+      "read": true,
+      "write": true,
+      "delete": false,
+      "admin": false
+    }
+  }
+}
+```
+
+### GET /rbac/resources/resolve
+Resolve which resource controls a specific endpoint.
+
+**Authentication:** Required
+
+**Query Parameters:**
+- `method`: HTTP method (required)
+- `path`: Endpoint path (required)
+- `service`: Service name (required)
+
+**Response (200):**
+```json
+{
+  "success": true,
+  "data": {
+    "resourceName": "database_operations",
+    "resourceId": "resource_id",
+    "resourceType": "database_operations",
+    "requiredPermissions": ["read"],
+    "endpoint": {
+      "method": "POST",
+      "path": "/api/database/12345/collections/users/find",
+      "service": "database-server"
+    },
+    "settings": {
+      "requiresSubaccount": true,
+      "globalAdminAccess": false
+    }
+  }
+}
+```
+
+### POST /rbac/subaccounts/:subaccountId/resources/:resourceName/enable-permissions
+Enable specific resource permissions for all users of a subaccount (Admin only).
+
+**Authentication:** Required (Admin role) or Service Token
+
+**Headers (for Service Authentication):**
+- `X-Service-Token`: Must match `TENANT_MANAGER_SERVICE_TOKEN` from .env
+- `X-User-ID`: User ID performing the operation (optional)
+- `X-Service-Name`: Service name (e.g., 'tenant-manager', 'database-server')
+
+**Parameters:**
+- `subaccountId`: The ID of the subaccount
+- `resourceName`: The name of the resource to enable permissions for
+
+**Request Body:**
+```json
+{
+  "permissions": {
+    "read": true,
+    "write": true,
+    "delete": false
+  }
+}
+```
+
+**Note:** The `admin` permission is always forced to `false` and cannot be enabled through this endpoint.
+
+**Response (200):**
+```json
+{
+  "success": true,
+  "message": "Permissions granted to 3 users",
+  "data": {
+    "subaccountId": "68e0fd8a25cd2b009bd267e2",
+    "resourceName": "database_operations",
+    "permissions": {
+      "read": true,
+      "write": true,
+      "delete": false,
+      "admin": false
+    },
+    "totalUsers": 3,
+    "successCount": 3,
+    "errorCount": 0,
+    "results": [
+      {
+        "userId": "68cd5f76605c030f71d32e01",
+        "success": true,
+        "permissionId": "permission_id_1"
+      },
+      {
+        "userId": "68cd5f76605c030f71d32e02",
+        "success": true,
+        "permissionId": "permission_id_2"
+      },
+      {
+        "userId": "68cd5f76605c030f71d32e03",
+        "success": true,
+        "permissionId": "permission_id_3"
+      }
+    ]
+  }
+}
+```
+
+### POST /rbac/subaccounts/:subaccountId/enable-all-permissions
+Enable permissions for all resources for all users of a subaccount (Admin only).
+
+**Authentication:** Required (Admin role) or Service Token
+
+**Headers (for Service Authentication):**
+- `X-Service-Token`: Must match `TENANT_MANAGER_SERVICE_TOKEN` from .env
+- `X-User-ID`: User ID performing the operation (optional)
+- `X-Service-Name`: Service name (e.g., 'tenant-manager', 'database-server')
+
+**Parameters:**
+- `subaccountId`: The ID of the subaccount
+
+**Request Body:**
+```json
+{
+  "permissions": {
+    "read": true,
+    "write": true,
+    "delete": false
+  }
+}
+```
+
+**Note:** The `admin` permission is always forced to `false` and cannot be enabled through this endpoint.
+
+**Response (200):**
+```json
+{
+  "success": true,
+  "message": "Permissions granted to 3 users for 5 resources",
+  "data": {
+    "subaccountId": "68e0fd8a25cd2b009bd267e2",
+    "permissions": {
+      "read": true,
+      "write": true,
+      "delete": false,
+      "admin": false
+    },
+    "totalUsers": 3,
+    "totalResources": 5,
+    "totalOperations": 15,
+    "successCount": 15,
+    "errorCount": 0,
+    "resourcesProcessed": [
+      "user_management",
+      "user_subaccount_management",
+      "database_operations",
+      "llm_operations",
+      "analytics"
+    ]
+  }
+}
+```
+
 ## Testing Examples
 
 ### Using cURL
@@ -482,6 +863,126 @@ curl -X POST http://localhost:3001/api/auth/login \
 ```bash
 curl -X GET http://localhost:3001/api/auth/profile \
   -H "Authorization: Bearer YOUR_ACCESS_TOKEN"
+```
+
+**Create RBAC Resource:**
+```bash
+curl -X POST http://localhost:3001/api/rbac/resources \
+  -H "Authorization: Bearer YOUR_SUPER_ADMIN_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "custom_operations",
+    "description": "Custom API operations",
+    "type": "custom",
+    "service": "custom-service",
+    "endpoints": [
+      {
+        "method": "GET",
+        "path": "/api/custom/items",
+        "description": "List all items",
+        "requiredPermissions": ["read"]
+      },
+      {
+        "method": "POST",
+        "path": "/api/custom/items",
+        "description": "Create a new item",
+        "requiredPermissions": ["write"]
+      }
+    ]
+  }'
+```
+
+**List Resources:**
+```bash
+curl -X GET "http://localhost:3001/api/rbac/resources?service=database-server" \
+  -H "Authorization: Bearer YOUR_ADMIN_TOKEN"
+```
+
+**Update Resource - Add New Endpoints:**
+```bash
+# Add new endpoints to an existing resource (merges with existing)
+curl -X PUT http://localhost:3001/api/rbac/resources/67890abcdef12345 \
+  -H "Authorization: Bearer YOUR_SUPER_ADMIN_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "endpoints": [
+      {
+        "method": "POST",
+        "path": "/api/database/:subaccountId/collections/:collection/aggregate",
+        "description": "Aggregate documents from a collection",
+        "requiredPermissions": ["read"]
+      },
+      {
+        "method": "POST",
+        "path": "/api/database/:subaccountId/collections/:collection/countDocuments",
+        "description": "Count documents in a collection",
+        "requiredPermissions": ["read"]
+      }
+    ]
+  }'
+```
+
+**Grant Permissions:**
+```bash
+curl -X POST http://localhost:3001/api/rbac/permissions/grant \
+  -H "Authorization: Bearer YOUR_ADMIN_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "userId": "user_id_here",
+    "resourceName": "database_operations",
+    "permissions": {
+      "read": true,
+      "write": true,
+      "delete": false,
+      "admin": false
+    }
+  }'
+```
+
+**Enable Resource Permissions for All Users in Subaccount:**
+```bash
+curl -X POST http://localhost:3001/api/rbac/subaccounts/68e0fd8a25cd2b009bd267e2/resources/database_operations/enable-permissions \
+  -H "Authorization: Bearer YOUR_ADMIN_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "permissions": {
+      "read": true,
+      "write": true,
+      "delete": false
+    }
+  }'
+```
+
+**Enable All Resource Permissions for All Users in Subaccount:**
+```bash
+curl -X POST http://localhost:3001/api/rbac/subaccounts/68e0fd8a25cd2b009bd267e2/enable-all-permissions \
+  -H "Authorization: Bearer YOUR_ADMIN_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "permissions": {
+      "read": true,
+      "write": true,
+      "delete": false
+    }
+  }'
+```
+
+**Enable Permissions Using Service Token:**
+```bash
+# Using service token authentication instead of user JWT
+# The X-Service-Token must match TENANT_MANAGER_SERVICE_TOKEN in your .env file
+curl -X POST http://localhost:3001/api/rbac/subaccounts/68e0fd8a25cd2b009bd267e2/resources/database_operations/enable-permissions \
+  -H "X-Service-Token: your_tenant_manager_service_token_from_env" \
+  -H "X-User-ID: user_id_performing_action" \
+  -H "X-Service-Name: tenant-manager" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "permissions": {
+      "read": true,
+      "write": true,
+      "delete": false
+    }
+  }'
 ```
 
 ### Using JavaScript/Fetch

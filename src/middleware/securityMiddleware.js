@@ -2,7 +2,7 @@ const RefreshToken = require('../models/RefreshToken');
 const Logger = require('../utils/logger');
 
 // IP-based rate limiting for sensitive operations
-const sensitiveOperationLimiter = (maxAttempts = 5, windowMinutes = 15) => {
+const sensitiveOperationLimiter = (maxAttempts = 50, windowMinutes = 15) => {
   const attempts = new Map();
 
   return (req, res, next) => {

@@ -6,15 +6,22 @@ const RBACController = require('../controllers/rbacController');
 
 // Import middleware
 const { authenticateToken } = require('../middleware/authMiddleware');
-const { requireRole } = require('../middleware/rbacMiddleware');
+const { requireRole, requireAdminOrSelf } = require('../middleware/rbacMiddleware');
 const { 
   requireAuthorizedIP, 
   requireSuperAdmin, 
   logSensitiveOperation 
 } = require('../middleware/ipAuthMiddleware');
+const { authenticateTokenOrTenantManager } = require('../middleware/serviceAuthMiddleware');
 
-// Apply authentication to all RBAC routes
-router.use(authenticateToken);
+// Apply authentication to all RBAC routes (except bulk permission routes which use custom auth)
+router.use((req, res, next) => {
+  // Skip default auth for bulk permission routes
+  if (req.path.includes('/subaccounts/') && req.path.includes('/enable')) {
+    return next();
+  }
+  return authenticateToken(req, res, next);
+});
 
 // Resource management (Super admin only)
 router.post('/resources',
@@ -26,6 +33,12 @@ router.post('/resources',
 router.get('/resources',
   requireRole('admin'),
   RBACController.listResources
+);
+
+router.put('/resources/:resourceId',
+  requireSuperAdmin,
+  logSensitiveOperation('update_resource'),
+  RBACController.updateResource
 );
 
 // Permission management (Admin and above)
@@ -45,15 +58,41 @@ router.get('/permissions/check',
   RBACController.checkUserPermissions
 );
 
+// Resolve resource by endpoint (for microservices to determine RBAC requirements)
+router.get('/resources/resolve',
+  RBACController.resolveResourceByEndpoint
+);
+
 router.get('/permissions/user/:userId',
-  requireRole('admin'),
+  requireAdminOrSelf('userId'),
   RBACController.listUserPermissions
+);
+
+// Get subaccount permissions (based on first non-owner user)
+router.get('/subaccounts/:subaccountId/permissions',
+  requireRole('admin'),
+  RBACController.getSubaccountPermissions
 );
 
 // System overview (Admin and above)
 router.get('/overview',
   requireRole('admin'),
   RBACController.getRBACOverview
+);
+
+// Bulk permission operations (Admin and above or Tenant Manager service token)
+router.post('/subaccounts/:subaccountId/resources/:resourceName/enable-permissions',
+  authenticateTokenOrTenantManager,
+  requireRole('admin'),
+  logSensitiveOperation('bulk_enable_resource_permissions'),
+  RBACController.enableResourcePermissionsForSubaccount
+);
+
+router.post('/subaccounts/:subaccountId/enable-all-permissions',
+  authenticateTokenOrTenantManager,
+  requireRole('admin'),
+  logSensitiveOperation('bulk_enable_all_permissions'),
+  RBACController.enableAllResourcePermissionsForSubaccount
 );
 
 module.exports = router; 

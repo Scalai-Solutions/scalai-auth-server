@@ -15,6 +15,7 @@ const {
   logoutAll,
   changeUserRole
 } = require('../controllers/authController');
+const { validateServiceToken } = require('../controllers/serviceTokenController');
 
 // Import validators
 const {
@@ -28,6 +29,7 @@ const {
 
 // Import middleware
 const { authenticateToken } = require('../middleware/authMiddleware');
+const { authenticateServiceToken } = require('../middleware/serviceAuthMiddleware');
 const { 
   requireAuthorizedIP, 
   requireSuperAdmin, 
@@ -40,6 +42,29 @@ router.post('/login', validateLogin, login);
 router.post('/request-reset-password', validateResetPasswordRequest, requestPasswordReset);
 router.post('/reset-password', validateResetPassword, resetPassword);
 router.post('/refresh-token', validateRefreshToken, refreshToken);
+
+// Service token validation endpoint
+router.post('/validate-service-token', authenticateServiceToken, async (req, res) => {
+  try {
+    // If we reach here, the service token is valid
+    res.json({
+      success: true,
+      message: 'Service token is valid',
+      data: {
+        serviceName: req.service.name,
+        permissions: req.service.permissions,
+        allowedIPs: req.service.allowedIPs,
+        rateLimit: req.service.rateLimit
+      }
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: 'Token validation error',
+      error: error.message
+    });
+  }
+});
 
 // Protected routes
 router.get('/profile', authenticateToken, getProfile);

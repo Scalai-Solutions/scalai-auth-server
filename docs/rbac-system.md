@@ -89,22 +89,367 @@ Manages user-resource-subaccount permission relationships:
 
 ### Resource Management (Super Admin Only)
 
-```bash
-# Create resource
-POST /api/rbac/resources
-Authorization: Bearer <super_admin_token>
-{
-  "name": "custom_operations",
-  "description": "Custom API operations",
-  "type": "custom",
-  "service": "custom-service",
-  "endpoints": [...],
-  "defaultPermissions": {...}
-}
+#### Create Resource with Endpoints
 
-# List resources
-GET /api/rbac/resources?service=database-server&type=database_operations
-Authorization: Bearer <admin_token>
+```bash
+# Create a resource with multiple endpoints
+curl -X POST http://localhost:3001/api/rbac/resources \
+  -H "Authorization: Bearer <super_admin_token>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "custom_operations",
+    "description": "Custom API operations",
+    "type": "custom",
+    "service": "custom-service",
+    "endpoints": [
+      {
+        "method": "GET",
+        "path": "/api/custom/items",
+        "description": "List all items",
+        "requiredPermissions": ["read"]
+      },
+      {
+        "method": "POST",
+        "path": "/api/custom/items",
+        "description": "Create a new item",
+        "requiredPermissions": ["write"]
+      },
+      {
+        "method": "PUT",
+        "path": "/api/custom/items/:id",
+        "description": "Update an item",
+        "requiredPermissions": ["write"]
+      },
+      {
+        "method": "DELETE",
+        "path": "/api/custom/items/:id",
+        "description": "Delete an item",
+        "requiredPermissions": ["delete"]
+      }
+    ],
+    "defaultPermissions": {
+      "super_admin": {
+        "read": true,
+        "write": true,
+        "delete": true,
+        "admin": true
+      },
+      "admin": {
+        "read": true,
+        "write": true,
+        "delete": true,
+        "admin": false
+      },
+      "user": {
+        "read": false,
+        "write": false,
+        "delete": false,
+        "admin": false
+      }
+    },
+    "settings": {
+      "requiresSubaccount": true,
+      "globalAdminAccess": false,
+      "rateLimits": {
+        "perUser": {
+          "requests": 100,
+          "windowMs": 60000
+        },
+        "perSubaccount": {
+          "requests": 1000,
+          "windowMs": 60000
+        }
+      }
+    }
+  }'
+```
+
+**Example: Database Operations Resource**
+```bash
+curl -X POST http://localhost:3001/api/rbac/resources \
+  -H "Authorization: Bearer <super_admin_token>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "database_operations",
+    "description": "Database queries and CRUD operations",
+    "type": "database_operations",
+    "service": "database-server",
+    "endpoints": [
+      {
+        "method": "POST",
+        "path": "/api/database/:subaccountId/collections/:collection/find",
+        "description": "Query documents from a collection",
+        "requiredPermissions": ["read"]
+      },
+      {
+        "method": "POST",
+        "path": "/api/database/:subaccountId/collections/:collection/insertOne",
+        "description": "Insert a single document",
+        "requiredPermissions": ["write"]
+      },
+      {
+        "method": "POST",
+        "path": "/api/database/:subaccountId/collections/:collection/updateMany",
+        "description": "Update multiple documents",
+        "requiredPermissions": ["write"]
+      },
+      {
+        "method": "POST",
+        "path": "/api/database/:subaccountId/collections/:collection/deleteMany",
+        "description": "Delete multiple documents",
+        "requiredPermissions": ["delete"]
+      },
+      {
+        "method": "GET",
+        "path": "/api/database/:subaccountId/stats",
+        "description": "Get database statistics",
+        "requiredPermissions": ["read"]
+      }
+    ],
+    "defaultPermissions": {
+      "super_admin": {
+        "read": true,
+        "write": true,
+        "delete": true,
+        "admin": true
+      },
+      "admin": {
+        "read": true,
+        "write": true,
+        "delete": false,
+        "admin": false
+      },
+      "user": {
+        "read": false,
+        "write": false,
+        "delete": false,
+        "admin": false
+      }
+    },
+    "settings": {
+      "requiresSubaccount": true,
+      "globalAdminAccess": false
+    }
+  }'
+```
+
+**Example: Subaccount Management Resource**
+```bash
+curl -X POST http://localhost:3001/api/rbac/resources \
+  -H "Authorization: Bearer <super_admin_token>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "subaccount_management",
+    "description": "Subaccount creation and management",
+    "type": "subaccount",
+    "service": "tenant-manager",
+    "endpoints": [
+      {
+        "method": "GET",
+        "path": "/api/subaccounts",
+        "description": "List all subaccounts for user",
+        "requiredPermissions": ["read"]
+      },
+      {
+        "method": "POST",
+        "path": "/api/subaccounts",
+        "description": "Create a new subaccount",
+        "requiredPermissions": ["write"]
+      },
+      {
+        "method": "PUT",
+        "path": "/api/subaccounts/:subaccountId",
+        "description": "Update subaccount details",
+        "requiredPermissions": ["admin"]
+      },
+      {
+        "method": "DELETE",
+        "path": "/api/subaccounts/:subaccountId",
+        "description": "Delete a subaccount",
+        "requiredPermissions": ["delete"]
+      },
+      {
+        "method": "POST",
+        "path": "/api/subaccounts/:subaccountId/members",
+        "description": "Add member to subaccount",
+        "requiredPermissions": ["admin"]
+      }
+    ],
+    "defaultPermissions": {
+      "super_admin": {
+        "read": true,
+        "write": true,
+        "delete": true,
+        "admin": true
+      },
+      "admin": {
+        "read": true,
+        "write": true,
+        "delete": false,
+        "admin": true
+      },
+      "user": {
+        "read": true,
+        "write": true,
+        "delete": false,
+        "admin": false
+      }
+    },
+    "settings": {
+      "requiresSubaccount": false,
+      "globalAdminAccess": true
+    }
+  }'
+```
+
+#### Update Resource - Add New Endpoints
+```bash
+# Add new endpoints to an existing resource (merges with existing, no duplicates)
+# First, get the resource ID
+curl -X GET "http://localhost:3001/api/rbac/resources?name=database_operations" \
+  -H "Authorization: Bearer <admin_token>"
+
+# Then update with new endpoints - these will be ADDED to existing endpoints
+curl -X PUT http://localhost:3001/api/rbac/resources/<resource_id> \
+  -H "Authorization: Bearer <super_admin_token>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "endpoints": [
+      {
+        "method": "POST",
+        "path": "/api/database/:subaccountId/collections/:collection/aggregate",
+        "description": "Aggregate documents from a collection",
+        "requiredPermissions": ["read"]
+      },
+      {
+        "method": "POST",
+        "path": "/api/database/:subaccountId/collections/:collection/countDocuments",
+        "description": "Count documents in a collection",
+        "requiredPermissions": ["read"]
+      }
+    ]
+  }'
+```
+
+**Note:** The update endpoint **merges** new endpoints with existing ones. If an endpoint with the same `method` and `path` already exists, it will be updated. Otherwise, it will be added.
+
+**Example: Update existing endpoint**
+```bash
+# This will UPDATE the description/permissions of an existing endpoint
+curl -X PUT http://localhost:3001/api/rbac/resources/<resource_id> \
+  -H "Authorization: Bearer <super_admin_token>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "endpoints": [
+      {
+        "method": "POST",
+        "path": "/api/database/:subaccountId/collections/:collection/find",
+        "description": "Query documents with advanced filters (UPDATED)",
+        "requiredPermissions": ["read", "admin"]
+      }
+    ]
+  }'
+```
+
+**Example: Update multiple fields**
+```bash
+# Update description, settings, and add new endpoints at once
+curl -X PUT http://localhost:3001/api/rbac/resources/<resource_id> \
+  -H "Authorization: Bearer <super_admin_token>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "description": "Enhanced database operations with advanced features",
+    "endpoints": [
+      {
+        "method": "POST",
+        "path": "/api/database/:subaccountId/collections/:collection/bulkWrite",
+        "description": "Perform bulk write operations",
+        "requiredPermissions": ["write"]
+      }
+    ],
+    "settings": {
+      "requiresSubaccount": true,
+      "globalAdminAccess": false,
+      "rateLimits": {
+        "perUser": {
+          "requests": 200,
+          "windowMs": 60000
+        }
+      }
+    }
+  }'
+```
+
+#### How Endpoint Merging Works
+
+When you update a resource with new endpoints, the system uses **smart merging**:
+
+**Duplicate Detection:**
+- Endpoints are identified by their `method` + `path` combination
+- Example: `POST:/api/database/:subaccountId/collections/:collection/find`
+
+**Merging Behavior:**
+
+| Scenario | Behavior | Example |
+|----------|----------|---------|
+| **New endpoint** | Added to resource | Resource has GET /items, you add POST /items → Both exist |
+| **Existing endpoint** | Updated (replaced) | Resource has POST /items with "read" permission, you update with "write" permission → Permission changes |
+| **Same method, different path** | Both kept | Resource has POST /items, you add POST /users → Both exist |
+| **Different method, same path** | Both kept | Resource has GET /items, you add POST /items → Both exist |
+
+**Example Flow:**
+
+```javascript
+// Initial resource has these endpoints:
+[
+  { method: "GET", path: "/api/items", description: "List items", requiredPermissions: ["read"] },
+  { method: "POST", path: "/api/items", description: "Create item", requiredPermissions: ["write"] }
+]
+
+// You send an update with:
+[
+  { method: "POST", path: "/api/items", description: "Create item (Updated)", requiredPermissions: ["write", "admin"] },
+  { method: "DELETE", path: "/api/items/:id", description: "Delete item", requiredPermissions: ["delete"] }
+]
+
+// Result will be:
+[
+  { method: "GET", path: "/api/items", description: "List items", requiredPermissions: ["read"] },  // Kept
+  { method: "POST", path: "/api/items", description: "Create item (Updated)", requiredPermissions: ["write", "admin"] },  // Updated
+  { method: "DELETE", path: "/api/items/:id", description: "Delete item", requiredPermissions: ["delete"] }  // Added
+]
+```
+
+**Benefits:**
+- ✅ No accidental deletion of existing endpoints
+- ✅ Easy to add new endpoints without fetching current ones
+- ✅ Can update specific endpoints without affecting others
+- ✅ Automatic deduplication by method+path
+
+#### List Resources
+```bash
+# List all resources
+curl -X GET http://localhost:3001/api/rbac/resources \
+  -H "Authorization: Bearer <admin_token>"
+
+# Filter by service
+curl -X GET "http://localhost:3001/api/rbac/resources?service=database-server" \
+  -H "Authorization: Bearer <admin_token>"
+
+# Filter by type
+curl -X GET "http://localhost:3001/api/rbac/resources?type=database_operations" \
+  -H "Authorization: Bearer <admin_token>"
+
+# Filter by service and type
+curl -X GET "http://localhost:3001/api/rbac/resources?service=database-server&type=database_operations" \
+  -H "Authorization: Bearer <admin_token>"
+```
+
+#### Resolve Resource by Endpoint
+```bash
+# Check which resource controls a specific endpoint
+curl -X GET "http://localhost:3001/api/rbac/resources/resolve?method=POST&path=/api/database/12345/collections/users/find&service=database-server" \
+  -H "Authorization: Bearer <token>"
 ```
 
 ### Permission Management (Admin and Above)

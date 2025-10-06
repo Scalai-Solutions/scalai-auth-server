@@ -39,6 +39,22 @@ const config = {
   
   cors: {
     origin: process.env.CORS_ORIGIN || 'http://localhost:3000'
+  },
+
+  // Service tokens for inter-service authentication
+  serviceTokens: {
+    tenantManager: process.env.TENANT_MANAGER_SERVICE_TOKEN
+  },
+
+  // Microservice URLs
+  services: {
+    tenantManagerUrl: process.env.TENANT_MANAGER_URL || 'http://localhost:3003',
+    databaseServerUrl: process.env.DATABASE_SERVER_URL || 'http://localhost:3002'
+  },
+
+  // Cache invalidation
+  cache: {
+    databaseServerWebhookSecret: process.env.DATABASE_SERVER_CACHE_WEBHOOK_SECRET
   }
 };
 

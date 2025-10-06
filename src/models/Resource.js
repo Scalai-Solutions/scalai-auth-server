@@ -142,7 +142,8 @@ resourceSchema.index({ createdBy: 1 });
 // Static method to find resource by endpoint
 resourceSchema.statics.findByEndpoint = async function(method, path, service) {
   try {
-    const resource = await this.findOne({
+    // First try exact match (for non-parameterized paths)
+    let resource = await this.findOne({
       service,
       isActive: true,
       endpoints: {
@@ -156,10 +157,56 @@ resourceSchema.statics.findByEndpoint = async function(method, path, service) {
       }
     });
     
-    return resource;
+    if (resource) {
+      return resource;
+    }
+    
+    // If no exact match, try to find parameterized paths
+    // Get all resources for this service and method
+    const resources = await this.find({
+      service,
+      isActive: true,
+      endpoints: {
+        $elemMatch: {
+          $or: [
+            { method: method.toUpperCase() },
+            { method: '*' }
+          ]
+        }
+      }
+    });
+    
+    // Check each resource's endpoints for parameterized path matches
+    for (const res of resources) {
+      for (const endpoint of res.endpoints) {
+        if ((endpoint.method === method.toUpperCase() || endpoint.method === '*') &&
+            this.matchesParameterizedPath(endpoint.path, path)) {
+          return res;
+        }
+      }
+    }
+    
+    return null;
   } catch (error) {
     return null;
   }
+};
+
+// Helper method to check if a parameterized path matches an actual path
+resourceSchema.statics.matchesParameterizedPath = function(templatePath, actualPath) {
+  // Handle wildcard paths
+  if (templatePath === '*') {
+    return true;
+  }
+  
+  // Convert parameterized path to regex
+  // Replace :paramName with regex pattern that matches any non-slash characters
+  const regexPattern = templatePath
+    .replace(/:[^/]+/g, '([^/]+)')  // Replace :param with capturing group
+    .replace(/\//g, '\\/');         // Escape forward slashes
+  
+  const regex = new RegExp(`^${regexPattern}$`);
+  return regex.test(actualPath);
 };
 
 // Static method to get default permissions for role
@@ -176,10 +223,12 @@ resourceSchema.statics.getDefaultPermissions = async function(resourceName, role
 
 // Method to check if endpoint requires specific permission
 resourceSchema.methods.getRequiredPermissions = function(method, path) {
-  const endpoint = this.endpoints.find(ep => 
-    (ep.method === method.toUpperCase() || ep.method === '*') &&
-    (ep.path === path || ep.path === '*')
-  );
+  const endpoint = this.endpoints.find(ep => {
+    const methodMatches = (ep.method === method.toUpperCase() || ep.method === '*');
+    const pathMatches = (ep.path === path || ep.path === '*' || 
+                        this.constructor.matchesParameterizedPath(ep.path, path));
+    return methodMatches && pathMatches;
+  });
   
   return endpoint ? endpoint.requiredPermissions : ['read'];
 };

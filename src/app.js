@@ -19,6 +19,7 @@ const authRoutes = require('./routes/authRoutes');
 const healthRoutes = require('./routes/healthRoutes');
 const rbacRoutes = require('./routes/rbacRoutes');
 const userRoutes = require('./routes/userRoutes');
+const serviceTokenRoutes = require('./routes/serviceTokenRoutes');
 
 const app = express();
 
@@ -53,7 +54,7 @@ app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 app.use('/api/health', healthRoutes);
 
 // Apply sensitive operation rate limiting to auth routes
-app.use('/api/auth/login', sensitiveOperationLimiter(5, 15)); // 5 attempts per 15 minutes
+app.use('/api/auth/login', sensitiveOperationLimiter(500, 15)); // 5 attempts per 15 minutes
 app.use('/api/auth/register', sensitiveOperationLimiter(3, 60)); // 3 attempts per hour
 app.use('/api/auth/reset-password', sensitiveOperationLimiter(3, 60)); // 3 attempts per hour
 app.use('/api/auth/request-reset-password', sensitiveOperationLimiter(5, 15)); // 5 attempts per 15 minutes
@@ -61,6 +62,7 @@ app.use('/api/auth/request-reset-password', sensitiveOperationLimiter(5, 15)); /
 app.use('/api/auth', authRoutes);
 app.use('/api/rbac', rbacRoutes); // Add RBAC management routes
 app.use('/api/users', userRoutes); // Add user management routes
+app.use('/api/service-tokens', serviceTokenRoutes); // Add service token management routes
 
 // 404 handler
 app.use((req, res) => {

@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const User = require('../models/User');
 const { authenticateToken } = require('../middleware/authMiddleware');
+const { authenticateTokenOrService } = require('../middleware/serviceAuthMiddleware');
 const { requireRole } = require('../middleware/rbacMiddleware');
 const Logger = require('../utils/logger');
 
@@ -81,14 +82,17 @@ router.get('/search', authenticateToken, async (req, res) => {
 });
 
 // GET /api/users/:userId - Get user by ID
-router.get('/:userId', authenticateToken, async (req, res) => {
+router.get('/:userId', authenticateTokenOrService, async (req, res) => {
   try {
     const { userId } = req.params;
+    const requesterId = req.user?.id || req.service?.name || 'service';
+    const requesterRole = req.user?.role || req.service?.name || 'service';
 
     Logger.debug('User retrieval request', {
       userId,
-      requesterId: req.user.id,
-      requesterRole: req.user.role
+      requesterId,
+      requesterRole,
+      isServiceAuth: !!req.service
     });
 
     // Find user by ID
@@ -115,7 +119,8 @@ router.get('/:userId', authenticateToken, async (req, res) => {
 
     Logger.audit('User retrieved by ID', 'user_get', {
       retrievedUserId: userId,
-      requesterId: req.user.id
+      requesterId,
+      isServiceAuth: !!req.service
     });
 
     res.json({
@@ -142,7 +147,7 @@ router.get('/:userId', authenticateToken, async (req, res) => {
       error: error.message,
       stack: error.stack,
       userId: req.params.userId,
-      requesterId: req.user?.id
+      requesterId: req.user?.id || req.service?.name
     });
 
     res.status(500).json({

@@ -105,6 +105,17 @@ const requirePermission = (resourceName, requiredPermission = 'read', options = 
 const requireRole = (requiredRole, options = {}) => {
   return async (req, res, next) => {
     try {
+      // Service token authentication bypasses role check (service is already trusted)
+      if (req.service && req.service.authenticated) {
+        req.roleCheck = {
+          passed: true,
+          effectiveRole: 'service',
+          reason: 'Service token authentication',
+          serviceName: req.service.name
+        };
+        return next();
+      }
+
       if (!req.user) {
         return res.status(401).json({
           success: false,
@@ -117,7 +128,10 @@ const requireRole = (requiredRole, options = {}) => {
       const userGlobalRole = req.user.role;
       const subaccountId = options.extractSubaccountId ? 
         options.extractSubaccountId(req) : 
-        req.params.subaccountId || req.body.subaccountId || req.query.subaccountId || null;
+        (req.params && req.params.subaccountId) || 
+        (req.body && req.body.subaccountId) || 
+        (req.query && req.query.subaccountId) || 
+        null;
 
       // Super admin always passes
       if (userGlobalRole === 'super_admin') {
@@ -290,6 +304,68 @@ const requireResourcePermission = (requiredPermission = 'read', options = {}) =>
   };
 };
 
+// Middleware to require admin role OR accessing own data
+const requireAdminOrSelf = (userIdParam = 'userId') => {
+  return async (req, res, next) => {
+    try {
+      if (!req.user) {
+        return res.status(401).json({
+          success: false,
+          message: 'Authentication required',
+          code: 'AUTH_REQUIRED'
+        });
+      }
+
+      const authenticatedUserId = req.user.id;
+      const targetUserId = req.params[userIdParam];
+      const userRole = req.user.role;
+
+      // Allow if user is super_admin or admin
+      if (userRole === 'super_admin' || userRole === 'admin') {
+        req.accessReason = 'admin_access';
+        return next();
+      }
+
+      // Allow if user is accessing their own data
+      if (authenticatedUserId === targetUserId) {
+        req.accessReason = 'self_access';
+        return next();
+      }
+
+      // Access denied
+      Logger.security('Unauthorized access attempt to user data', 'medium', {
+        userId: authenticatedUserId,
+        userEmail: req.user.email,
+        targetUserId,
+        userRole,
+        endpoint: req.originalUrl,
+        clientIP: req.ip
+      });
+
+      return res.status(403).json({
+        success: false,
+        message: 'Access denied. Admin role required or you can only access your own data.',
+        code: 'ACCESS_DENIED',
+        details: {
+          reason: 'Insufficient permissions to access other user data'
+        }
+      });
+
+    } catch (error) {
+      Logger.error('requireAdminOrSelf middleware error', {
+        error: error.message,
+        userId: req.user?.id
+      });
+
+      res.status(500).json({
+        success: false,
+        message: 'Authorization check failed',
+        code: 'AUTH_CHECK_ERROR'
+      });
+    }
+  };
+};
+
 // Utility function to extract subaccount ID from different request patterns
 const extractSubaccountId = {
   fromParams: (req) => req.params.subaccountId,
@@ -333,5 +409,6 @@ module.exports = {
   requireRole,
   requireResourcePermission,
   extractSubaccountId,
-  commonPermissions
+  commonPermissions,
+  requireAdminOrSelf
 }; 
