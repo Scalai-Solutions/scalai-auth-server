@@ -210,14 +210,13 @@ permissionSchema.statics.checkPermission = async function(userId, resourceName, 
       };
     }
     
-    // Global admins have access to all resources (unless resource specifically restricts it)
-    if (user.role === 'admin' && resource.settings.globalAdminAccess) {
-      const adminPermissions = resource.defaultPermissions.admin;
-      const hasRequiredPermission = adminPermissions[requiredPermission] === true;
-      
+    // Global admins have access to all resources and all permissions
+    // This means admins automatically have read, write, delete, and admin permissions
+    // for all resources across all subaccounts without explicit permission grants
+    if (user.role === 'admin') {
       return {
-        hasPermission: hasRequiredPermission,
-        reason: hasRequiredPermission ? 'Global admin access' : 'Admin lacks required permission',
+        hasPermission: true,
+        reason: 'Global admin access - automatic full permissions',
         effectiveRole: 'admin'
       };
     }
