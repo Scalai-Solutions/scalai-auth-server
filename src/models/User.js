@@ -117,8 +117,17 @@ const userSchema = new mongoose.Schema({
   }
 });
 
-// Pre-save middleware to hash password
+// Pre-save middleware to track changes
 userSchema.pre('save', async function(next) {
+  // Track if this is a new document
+  this.$locals.wasNew = this.isNew;
+  
+  // Track if role changed to admin
+  if (this.isModified('role')) {
+    this.$locals.roleChangedToAdmin = (this.role === 'admin');
+    this.$locals.previousRole = this.isNew ? null : this.get('role', null, { getters: false });
+  }
+  
   // Only hash the password if it has been modified (or is new)
   if (!this.isModified('password')) return next();
   
@@ -129,6 +138,91 @@ userSchema.pre('save', async function(next) {
   } catch (error) {
     next(error);
   }
+});
+
+// Post-save middleware to automatically grant permissions when a new admin is created or role is upgraded
+userSchema.post('save', async function(doc, next) {
+  // Only run for new admins or when role changes to admin
+  const isNewAdmin = this.$locals.wasNew && doc.role === 'admin';
+  const roleUpgradedToAdmin = this.$locals.roleChangedToAdmin && this.$locals.previousRole !== 'admin';
+  
+  if (isNewAdmin || roleUpgradedToAdmin) {
+    try {
+      const Permission = require('./Permission');
+      const Resource = require('./Resource');
+      const Subaccount = require('./Subaccount');
+      
+      // Get all active resources
+      const resources = await Resource.find({ isActive: true });
+      
+      // Get all active subaccounts
+      const subaccounts = await Subaccount.find({ isActive: true });
+      
+      if (resources.length === 0) {
+        return next();
+      }
+      
+      // Grant full permissions to this admin for all resources
+      const fullPermissions = {
+        read: true,
+        write: true,
+        delete: true,
+        admin: true
+      };
+      
+      const permissionPromises = [];
+      
+      // Grant global permission for each resource (no subaccount context)
+      for (const resource of resources) {
+        permissionPromises.push(
+          Permission.grantPermission({
+            userId: doc._id,
+            resourceName: resource.name,
+            permissions: fullPermissions,
+            subaccountId: null,
+            grantedBy: doc._id // Self-granted for new admins
+          })
+        );
+      }
+      
+      // Grant permission for each resource in each subaccount
+      for (const resource of resources) {
+        for (const subaccount of subaccounts) {
+          permissionPromises.push(
+            Permission.grantPermission({
+              userId: doc._id,
+              resourceName: resource.name,
+              permissions: fullPermissions,
+              subaccountId: subaccount._id,
+              grantedBy: doc._id // Self-granted for new admins
+            })
+          );
+        }
+      }
+      
+      await Promise.all(permissionPromises);
+      
+      const Logger = require('../utils/logger');
+      Logger.info('Auto-granted permissions to new admin user', {
+        userId: doc._id,
+        userEmail: doc.email,
+        isNewUser: isNewAdmin,
+        isRoleUpgrade: roleUpgradedToAdmin,
+        resourceCount: resources.length,
+        subaccountCount: subaccounts.length,
+        totalPermissionsGranted: permissionPromises.length
+      });
+      
+    } catch (error) {
+      const Logger = require('../utils/logger');
+      Logger.error('Failed to auto-grant permissions to new admin user', {
+        userId: doc._id,
+        userEmail: doc.email,
+        error: error.message
+      });
+    }
+  }
+  next();
 });
 
 // Instance method to check password

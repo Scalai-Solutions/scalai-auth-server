@@ -184,8 +184,11 @@ subaccountSchema.methods.getDecryptedUrl = function() {
   );
 };
 
-// Pre-save middleware to encrypt connection string
+// Pre-save middleware to track if document is new
 subaccountSchema.pre('save', function(next) {
+  this.$locals.wasNew = this.isNew;
+  
+  // Encrypt connection string if modified
   if (this.isModified('mongodbUrl') && !this.encryptionIV) {
     try {
       const encryptionResult = this.constructor.encryptConnectionString(this.mongodbUrl);
@@ -194,6 +197,77 @@ subaccountSchema.pre('save', function(next) {
       this.encryptionAuthTag = encryptionResult.authTag;
     } catch (error) {
       return next(error);
+    }
+  }
+  next();
+});
+
+// Post-save middleware to automatically grant permissions to all admins when a new subaccount is created
+subaccountSchema.post('save', async function(doc, next) {
+  // Only run for newly created subaccounts
+  if (this.$locals.wasNew) {
+    try {
+      const User = require('./User');
+      const Permission = require('./Permission');
+      const Resource = require('./Resource');
+      
+      // Get all admin users (not super_admin as they don't need explicit permissions)
+      const adminUsers = await User.find({ role: 'admin', isActive: true });
+      
+      if (adminUsers.length === 0) {
+        return next();
+      }
+      
+      // Get all active resources
+      const resources = await Resource.find({ isActive: true });
+      
+      if (resources.length === 0) {
+        return next();
+      }
+      
+      // Grant full permissions to all admins for all resources in this subaccount
+      const fullPermissions = {
+        read: true,
+        write: true,
+        delete: true,
+        admin: true
+      };
+      
+      const permissionPromises = [];
+      
+      // For each admin user
+      for (const admin of adminUsers) {
+        // Grant permission for each resource in this subaccount
+        for (const resource of resources) {
+          permissionPromises.push(
+            Permission.grantPermission({
+              userId: admin._id,
+              resourceName: resource.name,
+              permissions: fullPermissions,
+              subaccountId: doc._id,
+              grantedBy: doc.createdBy
+            })
+          );
+        }
+      }
+      
+      await Promise.all(permissionPromises);
+      
+      const Logger = require('../utils/logger');
+      Logger.info('Auto-granted permissions to all admins for new subaccount', {
+        subaccountName: doc.name,
+        subaccountId: doc._id,
+        adminCount: adminUsers.length,
+        resourceCount: resources.length,
+        totalPermissionsGranted: permissionPromises.length
+      });
+      
+    } catch (error) {
+      const Logger = require('../utils/logger');
+      Logger.error('Failed to auto-grant permissions to admins for new subaccount', {
+        subaccountName: doc.name,
+        error: error.message
+      });
     }
   }
   next();

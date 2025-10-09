@@ -233,6 +233,90 @@ resourceSchema.methods.getRequiredPermissions = function(method, path) {
   return endpoint ? endpoint.requiredPermissions : ['read'];
 };
 
+// Pre-save middleware to track if document is new
+resourceSchema.pre('save', function(next) {
+  this.$locals.wasNew = this.isNew;
+  next();
+});
+
+// Post-save middleware to automatically grant permissions to all admins when a new resource is created
+resourceSchema.post('save', async function(doc, next) {
+  // Only run for newly created resources
+  if (this.$locals.wasNew) {
+    try {
+      const User = require('./User');
+      const Permission = require('./Permission');
+      const Subaccount = require('./Subaccount');
+      
+      // Get all admin users (not super_admin as they don't need explicit permissions)
+      const adminUsers = await User.find({ role: 'admin', isActive: true });
+      
+      if (adminUsers.length === 0) {
+        return next();
+      }
+      
+      // Get all active subaccounts
+      const subaccounts = await Subaccount.find({ isActive: true });
+      
+      // Grant full permissions to all admins for this resource
+      const fullPermissions = {
+        read: true,
+        write: true,
+        delete: true,
+        admin: true
+      };
+      
+      const permissionPromises = [];
+      
+      // For each admin user
+      for (const admin of adminUsers) {
+        // Grant global permission (no subaccount context)
+        permissionPromises.push(
+          Permission.grantPermission({
+            userId: admin._id,
+            resourceName: doc.name,
+            permissions: fullPermissions,
+            subaccountId: null,
+            grantedBy: doc.createdBy
+          })
+        );
+        
+        // Grant permission for each subaccount
+        for (const subaccount of subaccounts) {
+          permissionPromises.push(
+            Permission.grantPermission({
+              userId: admin._id,
+              resourceName: doc.name,
+              permissions: fullPermissions,
+              subaccountId: subaccount._id,
+              grantedBy: doc.createdBy
+            })
+          );
+        }
+      }
+      
+      await Promise.all(permissionPromises);
+      
+      const Logger = require('../utils/logger');
+      Logger.info('Auto-granted permissions to all admins for new resource', {
+        resourceName: doc.name,
+        resourceId: doc._id,
+        adminCount: adminUsers.length,
+        subaccountCount: subaccounts.length,
+        totalPermissionsGranted: permissionPromises.length
+      });
+      
+    } catch (error) {
+      const Logger = require('../utils/logger');
+      Logger.error('Failed to auto-grant permissions to admins for new resource', {
+        resourceName: doc.name,
+        error: error.message
+      });
+    }
+  }
+  next();
+});
+
 const Resource = mongoose.model('Resource', resourceSchema);
 
 module.exports = Resource; 
