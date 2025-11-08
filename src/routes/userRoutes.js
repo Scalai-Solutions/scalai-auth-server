@@ -256,4 +256,118 @@ router.get('/', authenticateToken, requireRole(['admin', 'super_admin']), async 
   }
 });
 
+// PUT /api/users/:userId - Update user details
+router.put('/:userId', authenticateTokenOrService, async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const { firstName, lastName, email } = req.body;
+    const requesterId = req.user?.id || req.service?.name || 'service';
+
+    Logger.debug('User update request', {
+      userId,
+      requesterId,
+      updates: { firstName, lastName, email }
+    });
+
+    // Find user by ID
+    const user = await User.findById(userId);
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: 'User not found',
+        code: 'USER_NOT_FOUND'
+      });
+    }
+
+    // Check if user is active
+    if (!user.isActive) {
+      return res.status(404).json({
+        success: false,
+        message: 'User not found',
+        code: 'USER_NOT_FOUND'
+      });
+    }
+
+    // Build update object
+    const updates = {};
+    if (firstName !== undefined) {
+      updates.firstName = firstName.trim();
+    }
+    if (lastName !== undefined) {
+      updates.lastName = lastName.trim();
+    }
+    if (email !== undefined) {
+      // Check if email is already taken by another user
+      const existingUser = await User.findOne({ 
+        email: email.toLowerCase().trim(),
+        _id: { $ne: userId }
+      });
+      
+      if (existingUser) {
+        return res.status(400).json({
+          success: false,
+          message: 'Email already in use by another user',
+          code: 'EMAIL_ALREADY_EXISTS'
+        });
+      }
+      
+      updates.email = email.toLowerCase().trim();
+      // Reset email verification if email changed
+      updates.isEmailVerified = false;
+    }
+
+    // Update user
+    Object.assign(user, updates);
+    await user.save();
+
+    Logger.audit('User updated', 'user_update', {
+      updatedUserId: userId,
+      requesterId,
+      updates: Object.keys(updates),
+      isServiceAuth: !!req.service
+    });
+
+    res.json({
+      success: true,
+      message: 'User updated successfully',
+      data: {
+        user: {
+          id: user._id,
+          email: user.email,
+          firstName: user.firstName,
+          lastName: user.lastName,
+          role: user.role,
+          isActive: user.isActive,
+          isEmailVerified: user.isEmailVerified,
+          lastLogin: user.lastLogin,
+          updatedAt: user.updatedAt
+        }
+      }
+    });
+
+  } catch (error) {
+    Logger.error('User update failed', {
+      error: error.message,
+      stack: error.stack,
+      userId: req.params.userId,
+      requesterId: req.user?.id || req.service?.name
+    });
+
+    if (error.code === 11000) {
+      return res.status(400).json({
+        success: false,
+        message: 'Email already in use',
+        code: 'EMAIL_ALREADY_EXISTS'
+      });
+    }
+
+    res.status(500).json({
+      success: false,
+      message: 'Internal server error',
+      code: 'UPDATE_ERROR'
+    });
+  }
+});
+
 module.exports = router; 
