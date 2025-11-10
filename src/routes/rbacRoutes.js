@@ -16,8 +16,12 @@ const { authenticateTokenOrTenantManager } = require('../middleware/serviceAuthM
 
 // Apply authentication to all RBAC routes (except bulk permission routes which use custom auth)
 router.use((req, res, next) => {
-  // Skip default auth for bulk permission routes
-  if (req.path.includes('/subaccounts/') && req.path.includes('/enable')) {
+  // Skip default auth for bulk permission routes that use authenticateTokenOrTenantManager
+  const path = req.path || req.originalUrl;
+  if (path.includes('/subaccounts/') && path.includes('/resources/') && path.includes('/enable-permissions')) {
+    return next();
+  }
+  if (path.includes('/subaccounts/') && path.includes('/enable-all-permissions')) {
     return next();
   }
   return authenticateToken(req, res, next);
