@@ -7,7 +7,7 @@ const { requireRole } = require('../middleware/rbacMiddleware');
 const Logger = require('../utils/logger');
 
 // GET /api/users/search - Search for users by email
-router.get('/search', authenticateToken, async (req, res) => {
+router.get('/search', authenticateTokenOrService, async (req, res) => {
   try {
     const { email } = req.query;
     
@@ -21,8 +21,9 @@ router.get('/search', authenticateToken, async (req, res) => {
 
     Logger.debug('User search request', {
       email,
-      requesterId: req.user.id,
-      requesterRole: req.user.role
+      requesterId: req.user?.id || req.service?.name || 'unknown',
+      requesterRole: req.user?.role || req.service?.name || 'service',
+      isServiceAuth: !!req.service
     });
 
     // Find user by email
@@ -43,7 +44,8 @@ router.get('/search', authenticateToken, async (req, res) => {
     Logger.audit('User found via search', 'user_search', {
       searchedEmail: email,
       foundUserId: user._id,
-      requesterId: req.user.id
+      requesterId: req.user?.id || req.service?.name || 'unknown',
+      isServiceAuth: !!req.service
     });
 
     res.json({
@@ -70,7 +72,8 @@ router.get('/search', authenticateToken, async (req, res) => {
       error: error.message,
       stack: error.stack,
       email: req.query.email,
-      requesterId: req.user?.id
+      requesterId: req.user?.id || req.service?.name || 'unknown',
+      isServiceAuth: !!req.service
     });
 
     res.status(500).json({

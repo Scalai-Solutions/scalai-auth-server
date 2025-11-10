@@ -55,7 +55,7 @@ app.use('/api/health', healthRoutes);
 
 // Apply sensitive operation rate limiting to auth routes
 app.use('/api/auth/login', sensitiveOperationLimiter(500, 15)); // 5 attempts per 15 minutes
-app.use('/api/auth/register', sensitiveOperationLimiter(3, 60)); // 3 attempts per hour
+app.use('/api/auth/register', sensitiveOperationLimiter(20, 60)); // 20 attempts per hour
 app.use('/api/auth/reset-password', sensitiveOperationLimiter(3, 60)); // 3 attempts per hour
 app.use('/api/auth/request-reset-password', sensitiveOperationLimiter(5, 15)); // 5 attempts per 15 minutes
 

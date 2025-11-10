@@ -589,7 +589,7 @@ class RBACController {
         const userId = req.user?.id || requesterId;
         
         const response = await axios.get(
-          `${tenantManagerUrl}/api/${subaccountId}/users`,
+          `${tenantManagerUrl}/api/subaccounts/${subaccountId}/users`,
           {
             headers: {
               'X-Service-Token': serviceToken,
@@ -616,7 +616,7 @@ class RBACController {
         Logger.error('Error calling tenant-manager service', {
           error: error.message,
           subaccountId,
-          url: `${config.services.tenantManagerUrl}/api/${subaccountId}/users`
+          url: `${config.services.tenantManagerUrl}/api/subaccounts/${subaccountId}/users`
         });
         return res.status(500).json({
           success: false,
@@ -825,7 +825,7 @@ class RBACController {
         const userId = req.user?.id || grantedBy;
         
         const response = await axios.get(
-          `${tenantManagerUrl}/api/${subaccountId}/users`,
+          `${tenantManagerUrl}/api/subaccounts/${subaccountId}/users`,
           {
             headers: {
               'Authorization': `${req.headers.authorization}`,
@@ -853,7 +853,7 @@ class RBACController {
         Logger.error('Error calling tenant-manager service', {
           error: error.message,
           subaccountId,
-          url: `${config.services.tenantManagerUrl}/api/${subaccountId}/users`
+          url: `${config.services.tenantManagerUrl}/api/subaccounts/${subaccountId}/users`
         });
         return res.status(500).json({
           success: false,
@@ -1018,7 +1018,7 @@ class RBACController {
         const userId = req.user?.id || grantedBy;
         
         const response = await axios.get(
-          `${tenantManagerUrl}/api/${subaccountId}/users`,
+          `${tenantManagerUrl}/api/subaccounts/${subaccountId}/users`,
           {
             headers: {
               'X-Service-Token': serviceToken,
@@ -1045,7 +1045,7 @@ class RBACController {
         Logger.error('Error calling tenant-manager service', {
           error: error.message,
           subaccountId,
-          url: `${config.services.tenantManagerUrl}/api/${subaccountId}/users`
+          url: `${config.services.tenantManagerUrl}/api/subaccounts/${subaccountId}/users`
         });
         return res.status(500).json({
           success: false,
